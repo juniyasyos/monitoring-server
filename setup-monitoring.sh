@@ -111,6 +111,23 @@ require_file() {
     fi
 }
 
+ensure_docker_network() {
+    local network_name="$1"
+
+    if docker network inspect "$network_name" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    log_warn "Docker network '${network_name}' tidak ditemukan, mencoba membuatnya..."
+
+    if docker network create "$network_name" >/dev/null 2>&1; then
+        log_success "Docker network '${network_name}' berhasil dibuat"
+    else
+        log_error "Gagal membuat Docker network '${network_name}'"
+        exit 1
+    fi
+}
+
 update_prometheus_targets() {
     local target_ips="$1"
     local backup_file="${PROMETHEUS_CONFIG}.backup.${BACKUP_SUFFIX}"
@@ -220,6 +237,7 @@ setup_monitoring_server() {
 setup_target_server() {
     local monitoring_ip="$1"
     local compose_cmd="$2"
+    local app_network="rsch-srv_default"
 
     require_file "$COMPOSE_NODE_EXPORTER"
 
@@ -240,6 +258,8 @@ setup_target_server() {
     else
         log_warn "ufw tidak ditemukan, lewati konfigurasi firewall"
     fi
+
+    ensure_docker_network "$app_network"
 
     log_info "Menjalankan node exporter di target server..."
     $compose_cmd -f "$COMPOSE_NODE_EXPORTER" up -d
