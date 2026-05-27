@@ -1,0 +1,116 @@
+####################################################################################################
+# Docker Compose - Node Exporter for Production Server
+# 
+# Purpose: Run Prometheus Node Exporter on production server to expose system metrics
+# Deploy this on the same server where SIIMUT, IKP, IAM apps are running
+#
+# Usage:
+#   docker-compose -f docker-compose-node-exporter.yml up -d
+#   
+# Exposed ports:
+#   9100 - Node Exporter metrics endpoint
+#
+# Access metrics:
+#   curl http://localhost:9100/metrics
+#   or from monitoring server: http://<prod-server-ip>:9100/metrics
+####################################################################################################
+
+name: node-exporter-prod
+
+services:
+  ####################################################################################################
+  # Prometheus Node Exporter
+  # Collects system metrics: CPU, memory, disk, network, etc.
+  ####################################################################################################
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    ports:
+      - "9100:9100"
+    volumes:
+      # Mount host filesystem (read-only) for metrics collection
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+      - /etc/hostname:/etc/nodename:ro
+    environment:
+      # Node exporter environment
+      NODE_ID: "prod-server"
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.sysfs=/host/sys"
+      - "--path.rootfs=/rootfs"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+      - "--collector.filesystem.fs-types-exclude=^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$$"
+      - "--collector.netdev.device-exclude=^(veth.*|br.*|docker.*|virbr.*|lo)$$"
+      - "--no-collector.ipvs"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: "0.1"
+        reservations:
+          memory: 32M
+          cpus: "0.05"
+    networks:
+      default:
+        aliases:
+          - node-exporter
+
+  ####################################################################################################
+  # Nginx Prometheus Exporter
+  # Scrapes Nginx stub_status from the production server
+  ####################################################################################################
+  nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:latest
+    container_name: nginx-exporter
+    ports:
+      - "9113:9113"
+    command:
+      - "-nginx.scrape-uri=http://web:8000/nginx_status"
+    restart: unless-stopped
+    depends_on:
+      - node-exporter
+    networks:
+      default:
+        aliases:
+          - nginx-exporter
+      rsch-srv_default:
+        aliases:
+          - nginx-exporter
+    deploy:
+      resources:
+        limits:
+          memory: 32M
+          cpus: "0.05"
+        reservations:
+          memory: 16M
+          cpus: "0.02"
+
+  ####################################################################################################
+  # Optional: PHP-FPM Exporter (untuk monitoring PHP-FPM pools)
+  # Uncomment jika ingin monitor PHP-FPM metrics
+  ####################################################################################################
+  # php-fpm-exporter:
+  #   image: hipages/php-fpm-exporter:latest
+  #   container_name: php-fpm-exporter
+  #   ports:
+  #     - "8080:8080"
+  #   environment:
+  #     PHP_FPM_SCRAPE_URI: "tcp://127.0.0.1:9000/status"
+  #     LISTEN_ADDRESS: ":8080"
+  #   restart: unless-stopped
+  #   networks:
+  #     - default
+
+####################################################################################################
+# Networks
+####################################################################################################
+networks:
+  default:
+    name: node-exporter-network
+    driver: bridge
+
+  rsch-srv_default:
+    external: true

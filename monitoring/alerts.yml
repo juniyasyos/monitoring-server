@@ -1,0 +1,190 @@
+####################################################################################################
+# Prometheus Alert Rules
+# 
+# Define alert conditions yang akan dipicu ketika metrics mencapai threshold tertentu
+# Uncomment rules yang ingin digunakan
+####################################################################################################
+
+groups:
+  ####################################################################################################
+  # System Health Alerts
+  ####################################################################################################
+  - name: system_alerts
+    interval: 30s
+    rules:
+      # High CPU Usage
+      - alert: HighCPUUsage
+        expr: (100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)) > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High CPU usage detected on {{ $labels.instance }}"
+          description: "CPU usage is {{ $value }}% on {{ $labels.instance }}"
+
+      # High Memory Usage
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High memory usage detected on {{ $labels.instance }}"
+          description: "Memory usage is {{ $value | humanizePercentage }} on {{ $labels.instance }}"
+
+      # Low Disk Space
+      - alert: LowDiskSpace
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 15
+        for: 5m
+        labels:
+          severity: critical
+          service: system
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }}"
+          description: "Disk usage is {{ $value | humanizePercentage }} on {{ $labels.instance }}"
+
+      # High Disk I/O Wait
+      - alert: HighDiskIOWait
+        expr: (irate(node_cpu_seconds_total{mode="iowait"}[5m]) * 100) > 20
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High disk I/O wait on {{ $labels.instance }}"
+          description: "Disk I/O wait is {{ $value }}% on {{ $labels.instance }}"
+
+      # High Load Average
+      - alert: HighLoadAverage
+        expr: node_load15 > (count(node_cpu_seconds_total{mode="system"}) by (instance) * 2)
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High load average on {{ $labels.instance }}"
+          description: "15-minute load average is {{ $value }} on {{ $labels.instance }}"
+
+  ####################################################################################################
+  # Network Alerts
+  ####################################################################################################
+  - name: network_alerts
+    interval: 30s
+    rules:
+      # High Network Traffic (incoming)
+      - alert: HighInboundNetworkTraffic
+        expr: rate(node_network_receive_bytes_total{device!~"lo|docker.*"}[5m]) > 100000000  # 100MB/s
+        for: 5m
+        labels:
+          severity: warning
+          service: network
+        annotations:
+          summary: "High inbound network traffic on {{ $labels.instance }}"
+          description: "Inbound traffic is {{ $value | humanize }}B/s on {{ $labels.device }}"
+
+      # High Network Traffic (outgoing)
+      - alert: HighOutboundNetworkTraffic
+        expr: rate(node_network_transmit_bytes_total{device!~"lo|docker.*"}[5m]) > 100000000  # 100MB/s
+        for: 5m
+        labels:
+          severity: warning
+          service: network
+        annotations:
+          summary: "High outbound network traffic on {{ $labels.instance }}"
+          description: "Outbound traffic is {{ $value | humanize }}B/s on {{ $labels.device }}"
+
+      # Network Errors
+      - alert: HighNetworkErrors
+        expr: rate(node_network_receive_errs_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: network
+        annotations:
+          summary: "High network errors on {{ $labels.instance }}"
+          description: "Network errors detected on {{ $labels.device }}"
+
+  ####################################################################################################
+  # Application Alerts (Laravel/Docker)
+  ####################################################################################################
+  - name: application_alerts
+    interval: 30s
+    rules:
+      # Container Restart Alert
+      - alert: ContainerRestarts
+        expr: rate(container_last_seen{name!=""}[5m]) * 300 > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: docker
+        annotations:
+          summary: "Container {{ $labels.name }} restarting frequently"
+          description: "Container {{ $labels.name }} has restarted {{ $value }} times in the last 5 minutes"
+
+      # Container CPU High
+      - alert: ContainerHighCPU
+        expr: (sum(rate(container_cpu_usage_seconds_total[5m])) by (name) * 100) > 75
+        for: 5m
+        labels:
+          severity: warning
+          service: docker
+        annotations:
+          summary: "High CPU usage in container {{ $labels.name }}"
+          description: "Container {{ $labels.name }} CPU usage is {{ $value }}%"
+
+      # Container Memory High
+      - alert: ContainerHighMemory
+        expr: (sum(container_memory_usage_bytes) by (name) / sum(container_spec_memory_limit_bytes) by (name)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          service: docker
+        annotations:
+          summary: "High memory usage in container {{ $labels.name }}"
+          description: "Container {{ $labels.name }} memory usage is {{ $value }}%"
+
+  ####################################################################################################
+  # Prometheus Alerts
+  ####################################################################################################
+  - name: prometheus_alerts
+    interval: 30s
+    rules:
+      # Prometheus Down
+      - alert: PrometheusDown
+        expr: up{job="prometheus"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: monitoring
+        annotations:
+          summary: "Prometheus is down"
+          description: "Prometheus server is not responding"
+
+      # High Prometheus Ingestion Rate
+      - alert: PrometheusHighIngestionRate
+        expr: rate(prometheus_tsdb_samples_total[5m]) > 1000000
+        for: 5m
+        labels:
+          severity: warning
+          service: monitoring
+        annotations:
+          summary: "High Prometheus ingestion rate"
+          description: "Prometheus is ingesting {{ $value }} samples/sec"
+
+      # Prometheus Storage Usage
+      - alert: PrometheusHighStorageUsage
+        expr: (prometheus_tsdb_symbol_table_size_bytes + prometheus_tsdb_index_segment_creation_duration_seconds_total) / 1000000000 > 10  # 10GB
+        for: 5m
+        labels:
+          severity: warning
+          service: monitoring
+        annotations:
+          summary: "Prometheus storage usage is high"
+          description: "Prometheus storage is using significant disk space"
+
+####################################################################################################
+# Alert Notification Channels (Uncomment dalam alertmanager.yml)
+####################################################################################################
+# Slack, Email, PagerDuty, Webhook, dll dapat dikonfigurasi di alertmanager.yml

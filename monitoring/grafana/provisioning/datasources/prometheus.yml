@@ -1,0 +1,53 @@
+####################################################################################################
+# Grafana Datasource Provisioning
+# 
+# Auto-configure Prometheus as datasource on Grafana startup
+# Place in: monitoring/grafana/provisioning/datasources/prometheus.yml
+####################################################################################################
+
+apiVersion: 1
+
+providers:
+  - name: 'Provisioned datasources'
+    orgId: 1
+    folder: ''
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 60
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/datasources
+
+datasources:
+  - name: Prometheus
+    uid: 5BOgatKnk
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    password: ''
+    user: ''
+    database: ''
+    basicAuth: false
+    isDefault: true
+    jsonData:
+      timeInterval: '15s'
+    editable: true
+
+  # Optional: Add additional datasources
+  # - name: Elasticsearch
+  #   type: elasticsearch
+  #   access: proxy
+  #   url: http://elasticsearch:9200
+  #   database: '[metrics-]YYYY.MM.DD'
+  #   basicAuth: false
+  #   isDefault: false
+  #   editable: true
+
+  # - name: InfluxDB
+  #   type: influxdb
+  #   access: proxy
+  #   url: http://influxdb:8086
+  #   database: 'prometheus'
+  #   basicAuth: false
+  #   isDefault: false
+  #   editable: true

@@ -1,0 +1,29 @@
+####################################################################################################
+# Grafana Dashboard Provisioning
+#
+# Auto-load dashboards on Grafana startup
+# Download pre-built dashboards dari Grafana Dashboard Library:
+# - Node Exporter: https://grafana.com/grafana/dashboards/1860/
+# - Docker Containers: https://grafana.com/grafana/dashboards/893/
+# - Prometheus Stats: https://grafana.com/grafana/dashboards/3662/
+#
+# Simpan dashboard JSON files di: monitoring/grafana/provisioning/dashboards/
+####################################################################################################
+
+apiVersion: 1
+
+providers:
+  - name: 'Provisioned dashboards'
+    orgId: 1
+    folder: 'Monitoring'
+    type: file
+    disableDeletion: true
+    updateIntervalSeconds: 10
+    allowUiUpdates: false
+    options:
+      path: /etc/grafana/provisioning/dashboards
+      foldersFromFilesStructure: false
+
+# Dashboard JSON files in this folder are provisioned automatically:
+# - node-exporter-basic.json -> Node Exporter Full
+# - nginx.json -> Monitoring Nginx Service

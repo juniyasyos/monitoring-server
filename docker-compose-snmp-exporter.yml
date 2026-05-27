@@ -1,0 +1,39 @@
+####################################################################################################
+# Docker Compose - SNMP Exporter for Mikrotik Monitoring
+#
+# Purpose: Run Prometheus SNMP Exporter so Prometheus can scrape Mikrotik devices over SNMP.
+# Deploy this on the same Docker host/network as the monitoring stack.
+#
+# Usage:
+#   docker compose -f docker-compose-snmp-exporter.yml up -d
+#
+# Exposed ports:
+#   9116 - SNMP Exporter metrics endpoint and /snmp proxy
+#
+# Notes:
+#   - This uses the bundled default snmp_exporter config, which includes the mikrotik module.
+#   - Default auth is public_v2; change it only if your Mikrotik SNMP community differs.
+####################################################################################################
+
+name: snmp-exporter-stack
+
+services:
+  snmp-exporter:
+    image: prom/snmp-exporter:latest
+    container_name: snmp-exporter
+    ports:
+      - "9116:9116"
+    command:
+      - "--web.listen-address=:9116"
+      - "--config.file=/etc/snmp_exporter/snmp.yml"
+    restart: unless-stopped
+    networks:
+      - monitoring-network
+
+####################################################################################################
+# Networks
+####################################################################################################
+networks:
+  monitoring-network:
+    external: true
+    name: monitoring-network

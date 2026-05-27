@@ -1,0 +1,205 @@
+####################################################################################################
+# Prometheus Configuration
+# Scrape targets dan alert rules configuration
+####################################################################################################
+
+# Global settings
+global:
+  scrape_interval: 15s         # Default scrape interval
+  evaluation_interval: 15s     # Alert evaluation interval
+  scrape_timeout: 10s          # Timeout per scrape request
+  
+  # Labels yang ditambahkan ke setiap time series
+  external_labels:
+    cluster: 'siimut-cluster'
+    environment: 'production'
+
+####################################################################################################
+# Alerting Configuration
+####################################################################################################
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets:
+#             - alertmanager:9093
+
+# rule_files:
+#   - /etc/prometheus/alerts.yml
+
+####################################################################################################
+# Scrape Configurations
+####################################################################################################
+scrape_configs:
+  ####################################################################################################
+  # 1. Prometheus Self-Monitoring
+  ####################################################################################################
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'prometheus'
+
+  ####################################################################################################
+  # 2. Node Exporter - Production Server Metrics
+  # 
+  # Change <PROD_SERVER_IP> to your production server IP address
+  # Example: 192.168.1.100 or prod-server.local
+  ####################################################################################################
+  - job_name: 'node-exporter-prod'
+    static_configs:
+      - targets: ['<PROD_SERVER_IP>:9100']
+        labels:
+          server: 'production'
+          service: 'system'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'prod-server'
+      - source_labels: [__scheme__, __address__, __metrics_path__]
+        regex: '([^:]+)(?::\d+)?(.*)' 
+        replacement: '${1}${2}'
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+    scrape_interval: 15s
+    scrape_timeout: 10s
+
+  ####################################################################################################
+  # 3. SNMP Exporter - Mikrotik Devices
+  #
+  # Prometheus scrapes the exporter, and the exporter polls the Mikrotik IPs over SNMP.
+  # Default auth uses public_v2 and the built-in mikrotik module from snmp_exporter.
+  ####################################################################################################
+  - job_name: 'snmp-mikrotik'
+    metrics_path: /snmp
+    params:
+      auth: [public_v2]
+      module: [mikrotik]
+    static_configs:
+      - targets: ['192.168.1.1']
+      - targets: ['192.168.1.100']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: snmp-exporter:9116
+
+  ####################################################################################################
+  # 4. Docker Stats (optional - jika pakai cadvisor)
+  # Uncomment dan deploy cadvisor untuk collect Docker container metrics
+  ####################################################################################################
+  # - job_name: 'cadvisor'
+  #   static_configs:
+  #     - targets: ['<PROD_SERVER_IP>:8080']
+  #   relabel_configs:
+  #     - source_labels: [__address__]
+  #       target_label: instance
+  #       replacement: 'docker-containers'
+
+  ####################################################################################################
+  # 5. Laravel Application Metrics (jika pakai APM exporter)
+  # Uncomment jika ada custom exporter untuk app metrics
+  ####################################################################################################
+  # - job_name: 'laravel-siimut'
+  #   static_configs:
+  #     - targets: ['<PROD_SERVER_IP>:8081']
+  #   relabel_configs:
+  #     - source_labels: [__address__]
+  #       target_label: instance
+  #       replacement: 'siimut-app'
+
+  # - job_name: 'laravel-ikp'
+  #   static_configs:
+  #     - targets: ['<PROD_SERVER_IP>:8082']
+  #   relabel_configs:
+  #     - source_labels: [__address__]
+  #       target_label: instance
+  #       replacement: 'ikp-app'
+
+  # - job_name: 'laravel-iam'
+  #   static_configs:
+  #     - targets: ['<PROD_SERVER_IP>:8083']
+  #   relabel_configs:
+  #     - source_labels: [__address__]
+  #       target_label: instance
+  #       replacement: 'iam-app'
+
+  ####################################################################################################
+  # 6. Database Metrics (MySQL/PostgreSQL exporter)
+  # Uncomment jika monitoring database
+  ####################################################################################################
+  # - job_name: 'mysql-exporter'
+  #   static_configs:
+  #     - targets: ['<PROD_SERVER_IP>:9104']
+  #   relabel_configs:
+  #     - source_labels: [__address__]
+  #       target_label: instance
+  #       replacement: 'database-primary'
+
+  # - job_name: 'postgresql-exporter'
+  #   static_configs:
+  #     - targets: ['<PROD_SERVER_IP>:9187']
+  #   relabel_configs:
+  #     - source_labels: [__address__]
+  #       target_label: instance
+  #       replacement: 'database-postgres'
+
+  ####################################################################################################
+  # 7. Nginx Metrics (nginx-prometheus-exporter)
+  # Nginx exporter berjalan di host target yang sama dengan Node Exporter
+  ####################################################################################################
+  - job_name: 'nginx-exporter'
+    static_configs:
+      - targets: ['192.168.1.4:9113']
+        labels:
+          server: 'production'
+          service: 'nginx'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'nginx-web'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+
+  ####################################################################################################
+  # 8. Redis Metrics (redis-exporter)
+  # Uncomment jika monitoring Redis
+  ####################################################################################################
+  # - job_name: 'redis-exporter'
+  #   static_configs:
+  #     - targets: ['<PROD_SERVER_IP>:9121']
+  #   relabel_configs:
+  #     - source_labels: [__address__]
+  #       target_label: instance
+  #       replacement: 'redis-cache'
+
+  ####################################################################################################
+  # Service Discovery Example (untuk dynamic discovery)
+  # Uncomment jika setup di Docker Swarm atau Kubernetes
+  ####################################################################################################
+  # - job_name: 'docker-sd'
+  #   docker_sd_configs:
+  #     - host: 'unix:///var/run/docker.sock'
+  #   relabel_configs:
+  #     # Drop containers yang tidak expose port 9100/9090/etc
+  #     - source_labels: [__meta_docker_port_private]
+  #       regex: '(9100|9090|3000)'
+  #       action: 'keep'
+
+####################################################################################################
+# Remote Storage Configurations (optional)
+####################################################################################################
+# remote_write:
+#   - url: "http://remote-prometheus:9090/api/v1/write"
+#     write_relabel_configs:
+#       - source_labels: [__name__]
+#         regex: 'node_.*'
+#         action: 'keep'
+
+# remote_read:
+#   - url: "http://remote-prometheus:9090/api/v1/read"
+#     read_recent: true

@@ -1,0 +1,144 @@
+####################################################################################################
+# AlertManager Configuration
+# 
+# Configure notification channels dan alert routing
+# 
+# Uncomment di docker-compose-monitoring.yml untuk enable AlertManager service
+####################################################################################################
+
+global:
+  resolve_timeout: 5m
+  slack_api_url: '<YOUR_SLACK_WEBHOOK_URL>'
+
+route:
+  # Group alerts by labels
+  group_by: ['cluster', 'alertname', 'service']
+  
+  # How long to wait before sending notification of new alerts
+  group_wait: 30s
+  
+  # How long to wait before sending notification of resolved alerts
+  group_interval: 5m
+  
+  # How long to wait before re-sending notification
+  repeat_interval: 4h
+  
+  # Default receiver
+  receiver: 'default'
+
+  # Sub-routes dengan receiver berbeda
+  routes:
+    # Critical alerts ke PagerDuty
+    - match:
+        severity: critical
+      receiver: 'pagerduty'
+      continue: true
+    
+    # Warning alerts ke Slack
+    - match:
+        severity: warning
+      receiver: 'slack-warnings'
+    
+    # System alerts ke email
+    - match:
+        service: system
+      receiver: 'email'
+
+####################################################################################################
+# Receivers - Define notification channels
+####################################################################################################
+receivers:
+  ####################################################################################################
+  # Default receiver (jika severity tidak match)
+  ####################################################################################################
+  - name: 'default'
+    slack_configs:
+      - channel: '#alerts'
+        title: 'Alert: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+
+  ####################################################################################################
+  # Slack Receiver
+  ####################################################################################################
+  - name: 'slack-warnings'
+    slack_configs:
+      - channel: '#monitoring-warnings'
+        title: '⚠️ {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        actions:
+          - type: button
+            text: 'View in Grafana'
+            url: 'http://grafana:3000'
+          - type: button
+            text: 'View in Prometheus'
+            url: 'http://prometheus:9090'
+
+  ####################################################################################################
+  # Email Receiver
+  ####################################################################################################
+  - name: 'email'
+    email_configs:
+      - to: 'ops-team@example.com'
+        from: 'alertmanager@example.com'
+        smarthost: 'smtp.gmail.com:587'
+        auth_username: 'your-email@gmail.com'
+        auth_password: 'your-app-password'
+        headers:
+          Subject: 'Alert: {{ .GroupLabels.alertname }}'
+        html: |
+          <h2>{{ .GroupLabels.alertname }}</h2>
+          <p>{{ .Alerts.Firing | len }} firing alerts</p>
+          {{ range .Alerts }}
+            <hr>
+            <b>{{ .Labels.instance }}</b>: {{ .Annotations.description }}
+          {{ end }}
+
+  ####################################################################################################
+  # PagerDuty Receiver (untuk critical alerts)
+  ####################################################################################################
+  - name: 'pagerduty'
+    pagerduty_configs:
+      - service_key: '<YOUR_PAGERDUTY_SERVICE_KEY>'
+        description: '{{ .GroupLabels.alertname }} ({{ .Alerts.Firing | len }} firing)'
+        details:
+          firing: '{{ range .Alerts.Firing }}{{ .Labels.instance }} {{ end }}'
+          resolved: '{{ range .Alerts.Resolved }}{{ .Labels.instance }} {{ end }}'
+
+  ####################################################################################################
+  # Webhook Receiver (custom handler)
+  ####################################################################################################
+  - name: 'webhook'
+    webhook_configs:
+      - url: 'http://localhost:5000/alerts'
+        send_resolved: true
+        headers:
+          X-Custom-Header: 'AlertManager'
+
+####################################################################################################
+# Inhibition Rules - Suppress certain alerts when other alerts are firing
+####################################################################################################
+inhibit_rules:
+  # Don't send warning alerts if critical alert already sent
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'instance', 'service']
+
+  # Don't send alerts during maintenance window
+  - source_match:
+      maintenance: 'true'
+    target_match:
+    equal: ['instance']
+
+####################################################################################################
+# Grouping examples
+####################################################################################################
+# Alert grouping membantu mengurangi notification spam dengan group related alerts
+#
+# Contoh:
+#   Alert 1: instance1 - High CPU
+#   Alert 2: instance1 - High Memory
+#   Alert 3: instance1 - High Disk
+#
+# Akan di-group menjadi 1 notification (group_by: ['instance', 'alertname'])

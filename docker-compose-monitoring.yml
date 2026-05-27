@@ -1,0 +1,208 @@
+####################################################################################################
+# Docker Compose - Prometheus & Grafana Monitoring Stack
+#
+# Purpose: Run Prometheus (metrics collection) and Grafana (visualization/dashboarding)
+# Deploy this on a dedicated monitoring server or separate from production apps
+#
+# Usage:
+#   docker-compose -f docker-compose-monitoring.yml up -d
+#
+# Exposed ports:
+#   9990 - Prometheus web UI
+#   3000 - Grafana web UI (default admin/admin)
+#
+# Initial Setup:
+#   1. Access Grafana: http://localhost:3000
+#   2. Login: admin / admin (change password on first login)
+#   3. Add Prometheus data source: http://prometheus:9090
+#   4. Import dashboards (Node Exporter, Docker, etc.)
+#
+# Configuration:
+#   - Edit prometheus.yml to add/remove scrape targets
+#   - Prometheus config reloading: curl -X POST http://localhost:9990/-/reload
+#
+####################################################################################################
+
+name: monitoring-stack
+
+services:
+  ####################################################################################################
+  # Prometheus - Metrics Collection & Storage
+  ####################################################################################################
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9990:9090"
+    volumes:
+      # Prometheus configuration
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # Custom alert rules (optional)
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      # Persistent storage untuk metrics
+      - prometheus_data:/prometheus
+    environment:
+      TZ: "Asia/Jakarta"
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"  # Keep metrics for 30 days
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+      - "--web.enable-lifecycle"  # Enable config reload via API
+    restart: unless-stopped
+    # Use numeric UID/GID to avoid host-specific nobody/nogroup lookup failures
+    user: "65534:65534"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1"
+        reservations:
+          memory: 256M
+          cpus: "0.5"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      default:
+        aliases:
+          - prometheus
+
+  ####################################################################################################
+  # Grafana - Metrics Visualization & Dashboards
+  ####################################################################################################
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      # Persistent storage untuk dashboards, datasources, plugins
+      - grafana_storage:/var/lib/grafana
+      # Grafana configuration (optional)
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    environment:
+      # Grafana settings
+      GF_SECURITY_ADMIN_USER: "admin"
+      GF_SECURITY_ADMIN_PASSWORD: "admin"  # ⚠️ CHANGE THIS in production!
+      GF_SERVER_ROOT_URL: "http://grafana:3000"
+      GF_INSTALL_PLUGINS: "grafana-piechart-panel"
+      
+      # Timezone
+      TZ: "Asia/Jakarta"
+      
+      # Database (defaults to SQLite)
+      GF_DATABASE_TYPE: "sqlite3"
+      GF_DATABASE_PATH: "/var/lib/grafana/grafana.db"
+      
+      # Optional: PostgreSQL backend (for HA)
+      # GF_DATABASE_TYPE: "postgres"
+      # GF_DATABASE_HOST: "postgres:5432"
+      # GF_DATABASE_USER: "grafana"
+      # GF_DATABASE_PASSWORD: "grafana-password"
+      # GF_DATABASE_NAME: "grafana"
+      
+      # Security
+      GF_SECURITY_COOKIE_SECURE: "false"  # Set to true jika pakai HTTPS
+      GF_SECURITY_COOKIE_SAMESITE: "Lax"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      
+      # Analytics
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "true"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "true"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+        reservations:
+          memory: 256M
+          cpus: "0.25"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      default:
+        aliases:
+          - grafana
+    depends_on:
+      prometheus:
+        condition: service_healthy
+
+  ####################################################################################################
+  # Optional: AlertManager (untuk alert notifications)
+  # Uncomment untuk enable alerting features
+  ####################################################################################################
+  # alertmanager:
+  #   image: prom/alertmanager:latest
+  #   container_name: alertmanager
+  #   ports:
+  #     - "9093:9093"
+  #   volumes:
+  #     - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+  #     - alertmanager_data:/alertmanager
+  #   command:
+  #     - "--config.file=/etc/alertmanager/alertmanager.yml"
+  #     - "--storage.path=/alertmanager"
+  #     - "--web.external-url=http://alertmanager:9093"
+  #   restart: unless-stopped
+  #   networks:
+  #     - default
+
+  ####################################################################################################
+  # Optional: Caddy Reverse Proxy (untuk SSL/TLS & single entry point)
+  # Uncomment untuk enable reverse proxy
+  ####################################################################################################
+  # caddy:
+  #   image: caddy:alpine
+  #   container_name: caddy-monitoring
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ./monitoring/Caddyfile:/etc/caddy/Caddyfile:ro
+  #     - caddy_data:/data
+  #     - caddy_config:/config
+  #   environment:
+  #     DOMAIN: "monitoring.example.com"
+  #   restart: unless-stopped
+  #   networks:
+  #     - default
+
+####################################################################################################
+# Persistent Volumes
+####################################################################################################
+volumes:
+  # Prometheus TSDB storage
+  prometheus_data:
+    driver: local
+
+  # Grafana dashboards, datasources, plugins storage
+  grafana_storage:
+    driver: local
+
+  # Optional: AlertManager data
+  # alertmanager_data:
+  #   driver: local
+
+  # Optional: Caddy data (SSL certs, config)
+  # caddy_data:
+  #   driver: local
+  # caddy_config:
+  #   driver: local
+
+####################################################################################################
+# Networks
+####################################################################################################
+networks:
+  default:
+    name: monitoring-network
+    driver: bridge
