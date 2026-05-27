@@ -7,7 +7,6 @@ COMPOSE_MONITORING="$SCRIPT_DIR/docker-compose-monitoring.yml"
 COMPOSE_NODE_EXPORTER="$SCRIPT_DIR/docker-compose-node-exporter.yml"
 PROMETHEUS_CONFIG="$SCRIPT_DIR/monitoring/prometheus.yml"
 BACKUP_SUFFIX="$(date +%Y%m%d_%H%M%S)"
-DEFAULT_NODE_EXPORTER_IP="192.168.1.4"
 NODE_EXPORTER_PORT="9100"
 NGINX_EXPORTER_PORT="9113"
 
@@ -36,21 +35,21 @@ log_error() {
 show_help() {
     cat <<'EOF'
 Usage:
-    ./setup-monitoring.sh monitoring [target-server-ip]
-  ./setup-monitoring.sh target-server <monitoring-server-ip>
+    ./setup-monitoring.sh monitoring
+    ./setup-monitoring.sh target-server <monitoring-server-ip>
 
 Examples:
-  ./setup-monitoring.sh monitoring 192.168.1.100
     ./setup-monitoring.sh monitoring
     ./setup-monitoring.sh target-server 192.168.1.4
-  ./setup-monitoring.sh target-server 192.168.1.200
+    ./setup-monitoring.sh target-server 192.168.1.200
+    MONITORING_TARGET_IPS=192.168.1.4,192.168.1.99 ./setup-monitoring.sh monitoring
 
 Roles:
-  monitoring     Update Prometheus target IP and start Prometheus + Grafana.
-  target-server  Start Node Exporter on the production/target server.
+    monitoring     Start Prometheus + Grafana. Optional: sync target IP list from MONITORING_TARGET_IPS.
+    target-server  Start Node Exporter on the production/target server.
 
-Default target server IP untuk monitoring adalah 192.168.1.4.
-Target server IP untuk firewall rule exporter biasanya monitoring server, misalnya 192.168.1.4.
+Set MONITORING_TARGET_IPS untuk menulis target ke monitoring/prometheus.yml saat mode monitoring.
+Target server IP untuk firewall rule exporter adalah IP monitoring server.
 EOF
 }
 
@@ -84,6 +83,25 @@ validate_ip() {
     return 1
 }
 
+validate_ip_list() {
+    local ip_list="$1"
+    local IFS=','
+    local ip
+
+    read -r -a ips <<< "$ip_list"
+    for ip in "${ips[@]}"; do
+        ip="${ip//[[:space:]]/}"
+        if [[ -z "$ip" ]]; then
+            continue
+        fi
+        if ! validate_ip "$ip"; then
+            return 1
+        fi
+    done
+
+    return 0
+}
+
 require_file() {
     local file_path="$1"
 
@@ -93,34 +111,79 @@ require_file() {
     fi
 }
 
-update_prometheus_target() {
-    local target_ip="$1"
+update_prometheus_targets() {
+    local target_ips="$1"
     local backup_file="${PROMETHEUS_CONFIG}.backup.${BACKUP_SUFFIX}"
+    local tmp_file="${PROMETHEUS_CONFIG}.tmp.${BACKUP_SUFFIX}"
 
     cp "$PROMETHEUS_CONFIG" "$backup_file"
-    sed -i "/job_name: 'node-exporter-prod'/,/relabel_configs:/ s|targets: \['[^']*:9100'\]|targets: ['${target_ip}:9100']|" "$PROMETHEUS_CONFIG"
+    awk -v target_ips="$target_ips" '
+        function emit_targets(csv,   count, items, i, target_ip) {
+            count = split(csv, items, ",")
+            print "      - targets:"
+            for (i = 1; i <= count; i++) {
+                target_ip = items[i]
+                gsub(/^[[:space:]]+|[[:space:]]+$/, "", target_ip)
+                if (target_ip != "") {
+                    print "          - '\''" target_ip ":9100'\''"
+                }
+            }
+        }
 
-    if grep -Eq "^[[:space:]]*-[[:space:]]*targets:[[:space:]]*\['<PROD_SERVER_IP>:[0-9]+'\]" "$PROMETHEUS_CONFIG"; then
-        log_warn "Masih ada placeholder <PROD_SERVER_IP> di prometheus.yml. Cek file hasil edit."
-    fi
+        BEGIN {
+            in_node_exporter_job = 0
+            replacing_targets = 0
+        }
 
-    log_success "Prometheus target diperbarui ke ${target_ip}:9100"
+        /^  - job_name: / && $0 !~ /^  - job_name: '\''node-exporter-prod'\''/ {
+            in_node_exporter_job = 0
+        }
+
+        /^  - job_name: '\''node-exporter-prod'\''/ {
+            in_node_exporter_job = 1
+        }
+
+        in_node_exporter_job && /^    static_configs:/ {
+            print
+            emit_targets(target_ips)
+            replacing_targets = 1
+            next
+        }
+
+        replacing_targets {
+            if ($0 ~ /^        labels:/) {
+                replacing_targets = 0
+                print
+            }
+            next
+        }
+
+        { print }
+    ' "$PROMETHEUS_CONFIG" > "$tmp_file"
+
+    mv "$tmp_file" "$PROMETHEUS_CONFIG"
+
+    log_success "Prometheus target diperbarui ke ${target_ips}"
     log_info "Backup konfigurasi disimpan di ${backup_file}"
 }
 
 setup_monitoring_server() {
-    local target_ip="$1"
-    local compose_cmd="$2"
+    local compose_cmd="$1"
+    local target_ips="${MONITORING_TARGET_IPS:-}"
 
     require_file "$PROMETHEUS_CONFIG"
     require_file "$COMPOSE_MONITORING"
 
-    if ! validate_ip "$target_ip"; then
-        log_error "Target server IP tidak valid: $target_ip"
-        exit 1
-    fi
+    if [[ -n "$target_ips" ]]; then
+        if ! validate_ip_list "$target_ips"; then
+            log_error "Target server IP tidak valid: $target_ips"
+            exit 1
+        fi
 
-    update_prometheus_target "$target_ip"
+        update_prometheus_targets "$target_ips"
+    else
+        log_info "MONITORING_TARGET_IPS tidak diset, lewati update target Prometheus"
+    fi
 
     # Ensure Grafana dashboards are provisioned automatically
     if [[ -x "$SCRIPT_DIR/monitoring/provision-grafana.sh" ]]; then
@@ -135,7 +198,11 @@ setup_monitoring_server() {
     $compose_cmd -f "$COMPOSE_MONITORING" up -d
 
     log_info "Menjalankan testing setelah startup..."
-    run_monitoring_tests "$target_ip"
+    if [[ -n "$target_ips" ]]; then
+        run_monitoring_tests "$target_ips"
+    else
+        log_info "Lewati tes target scrape karena MONITORING_TARGET_IPS kosong"
+    fi
 
     log_success "Monitoring stack aktif"
     echo ""
@@ -143,7 +210,11 @@ setup_monitoring_server() {
     echo "  Prometheus: http://localhost:9990"
     echo "  Grafana:    http://localhost:3000"
     echo ""
-    echo "Target yang discrape: ${target_ip}:9100"
+    if [[ -n "$target_ips" ]]; then
+        echo "Target yang discrape: ${target_ips}"
+    else
+        echo "Target yang discrape: lihat monitoring/prometheus.yml"
+    fi
 }
 
 setup_target_server() {
@@ -183,9 +254,14 @@ setup_target_server() {
 }
 
 run_monitoring_tests() {
-    local target_ip="$1"
+    local target_ips="$1"
     local failures=0
-    local node_exporter_url="http://${target_ip}:${NODE_EXPORTER_PORT}/metrics"
+    local node_exporter_url
+    local IFS=','
+    local ip
+    local ips=()
+
+    read -r -a ips <<< "$target_ips"
 
     if wait_for_http "http://localhost:9990/-/healthy" 30 2; then
         log_success "Test Prometheus health: OK"
@@ -201,19 +277,26 @@ run_monitoring_tests() {
         failures=$((failures + 1))
     fi
 
-    if wait_for_scrape_target "$target_ip" 30 2; then
-        log_success "Test scrape target ${target_ip}:9100: OK"
-    else
-        log_error "Test scrape target ${target_ip}:9100: FAILED"
-        failures=$((failures + 1))
-    fi
+    for ip in "${ips[@]}"; do
+        ip="${ip//[[:space:]]/}"
+        [[ -z "$ip" ]] && continue
 
-    if wait_for_http "$node_exporter_url" 30 2; then
-        log_success "Test node exporter metrics endpoint ${target_ip}:9100: OK"
-    else
-        log_error "Test node exporter metrics endpoint ${target_ip}:9100: FAILED"
-        failures=$((failures + 1))
-    fi
+        node_exporter_url="http://${ip}:${NODE_EXPORTER_PORT}/metrics"
+
+        if wait_for_scrape_target "$ip" 30 2; then
+            log_success "Test scrape target ${ip}:9100: OK"
+        else
+            log_error "Test scrape target ${ip}:9100: FAILED"
+            failures=$((failures + 1))
+        fi
+
+        if wait_for_http "$node_exporter_url" 30 2; then
+            log_success "Test node exporter metrics endpoint ${ip}:9100: OK"
+        else
+            log_error "Test node exporter metrics endpoint ${ip}:9100: FAILED"
+            failures=$((failures + 1))
+        fi
+    done
 
     if wait_for_prometheus_query 'nginx_up' 30 2; then
         log_success "Test scraping data nginx_up: OK"
@@ -320,7 +403,7 @@ main() {
     fi
 
     local role="$1"
-    local ip="${2:-}"
+    local ip=""
     local compose_cmd
 
     if [[ "$role" == "-h" || "$role" == "--help" || "$role" == "help" ]]; then
@@ -335,10 +418,10 @@ main() {
 
     case "$role" in
         monitoring)
-            ip="${ip:-$DEFAULT_NODE_EXPORTER_IP}"
-            setup_monitoring_server "$ip" "$compose_cmd"
+            setup_monitoring_server "$compose_cmd"
             ;;
         target-server|target|production)
+            ip="${2:-}"
             if [[ -z "$ip" ]]; then
                 show_help
                 exit 1

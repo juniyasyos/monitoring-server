@@ -44,12 +44,14 @@ scrape_configs:
   ####################################################################################################
   # 2. Node Exporter - Production Server Metrics
   # 
-  # Change <PROD_SERVER_IP> to your production server IP address
-  # Example: 192.168.1.100 or prod-server.local
+  # Change <PROD_SERVER_IP> to your production server IP addresses
+  # Example: 192.168.1.4, 192.168.1.99
   ####################################################################################################
   - job_name: 'node-exporter-prod'
     static_configs:
-      - targets: ['<PROD_SERVER_IP>:9100']
+      - targets:
+          - '192.168.1.4:9100'
+          - '192.168.1.99:9100'
         labels:
           server: 'production'
           service: 'system'

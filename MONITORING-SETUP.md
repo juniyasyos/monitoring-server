@@ -24,8 +24,12 @@ Production Server (siimut-docker)          Monitoring Server
 Jika Anda ingin setup lebih cepat, pakai skrip berikut dari root repo:
 
 ```bash
-# Di monitoring server: update target IP lalu start Prometheus + Grafana
-bash setup-monitoring.sh monitoring <TARGET_SERVER_IP>
+# Di monitoring server: start Prometheus + Grafana
+# Opsional: set target secara otomatis lewat env
+MONITORING_TARGET_IPS=192.168.1.4,192.168.1.99 bash setup-monitoring.sh monitoring
+
+# Atau cukup jalankan monitoring stack saja
+bash setup-monitoring.sh monitoring
 
 # Di target/production server: start Node Exporter dan buka akses ke monitoring server
 bash setup-monitoring.sh target-server <MONITORING_SERVER_IP>
@@ -39,7 +43,8 @@ Automasi tambahan:
 Contoh pemakaian:
 
 ```bash
-bash setup-monitoring.sh monitoring 192.168.1.4
+bash setup-monitoring.sh monitoring
+bash setup-monitoring.sh target-server 192.168.1.200
 ```
 
 ### 1. Production Server - Deploy Node Exporter
@@ -56,9 +61,7 @@ curl http://localhost:9100/metrics | head -20
 
 ```bash
 # Di server monitoring (terpisah atau lokal)
-# PENTING: Edit monitoring/prometheus.yml terlebih dahulu!
-
-# Ganti <PROD_SERVER_IP> dengan IP address production server
+# PENTING: Edit monitoring/prometheus.yml terlebih dahulu, atau set via env MONITORING_TARGET_IPS
 nano monitoring/prometheus.yml
 
 # Start services

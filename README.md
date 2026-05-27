@@ -32,6 +32,18 @@ Jalankan stack monitoring dengan file compose bawaan:
 docker compose -f docker-compose-monitoring.yml up -d
 ```
 
+Jika ingin menulis target node exporter secara otomatis ke Prometheus, set env lalu jalankan:
+
+```bash
+MONITORING_TARGET_IPS=192.168.1.4,192.168.1.99 ./setup-monitoring.sh monitoring
+```
+
+Kalau target sudah ditulis manual di [monitoring/prometheus.yml](monitoring/prometheus.yml), cukup jalankan:
+
+```bash
+./setup-monitoring.sh monitoring
+```
+
 ## Akses
 
 - Prometheus: http://localhost:9990
@@ -41,6 +53,9 @@ docker compose -f docker-compose-monitoring.yml up -d
 ## Konfigurasi yang perlu disesuaikan
 
 - Target scraping Prometheus: edit [monitoring/prometheus.yml](monitoring/prometheus.yml) untuk menambahkan `node_exporter`, `nginx`, atau `snmp_exporter`.
+- Untuk node exporter, dua server yang dimonitor pada setup ini adalah `192.168.1.4:9100` dan `192.168.1.99:9100`.
+- Command monitoring bisa dijalankan tanpa argumen target: `./setup-monitoring.sh monitoring`.
+- Jika ingin auto-update target dari command, pakai env `MONITORING_TARGET_IPS=192.168.1.4,192.168.1.99`.
 - Ganti password default Grafana di [docker-compose-monitoring.yml](docker-compose-monitoring.yml).
 - Jika menggunakan Alertmanager: aktifkan service terkait di [docker-compose-monitoring.yml](docker-compose-monitoring.yml) dan isi kredensial/aturan di [monitoring/alertmanager.yml](monitoring/alertmanager.yml).
 
