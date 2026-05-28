@@ -19,6 +19,7 @@
 #   restore [file]     - Restore from backup
 #   cleanup            - Stop & remove volumes
 #   health-check       - Test connectivity
+#   target-check       - Check registered node exporter targets
 #   help               - Show this help message
 #
 ####################################################################################################
@@ -264,6 +265,11 @@ cmd_health_check() {
     log_info "Health check completed!"
 }
 
+cmd_target_check() {
+    log_info "Checking registered node exporter targets..."
+    bash "$SCRIPT_DIR/check-node-exporter-targets.sh" "$@"
+}
+
 cmd_help() {
     cat << EOF
 
@@ -284,6 +290,7 @@ Commands:
   ${YELLOW}restore${NC} [file]     - Restore from backup file
   ${YELLOW}cleanup${NC}            - Stop & remove all volumes (⚠️  DESTRUCTIVE)
   ${YELLOW}health-check${NC}       - Test service connectivity
+    ${YELLOW}target-check${NC}      - Check registered node exporter targets
   ${YELLOW}help${NC}              - Show this help message
 
 Examples:
@@ -302,6 +309,9 @@ Examples:
   
   # Health check
   ./monitoring-helper.sh health-check
+
+    # Check registered node exporter targets
+    ./monitoring-helper.sh target-check
 
 Environment:
   COMPOSE_FILE     - Docker Compose config location
@@ -347,6 +357,10 @@ main() {
             ;;
         health-check)
             cmd_health_check
+            ;;
+        target-check)
+            shift
+            cmd_target_check "$@"
             ;;
         help)
             cmd_help
