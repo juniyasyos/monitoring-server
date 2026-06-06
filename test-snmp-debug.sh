@@ -52,9 +52,7 @@ if [ "$DOCKER_AVAILABLE" -eq 1 ]; then
     docker network inspect "$NETWORK" >/dev/null 2>&1 && pass "Docker network '$NETWORK' exists" || fail "Docker network '$NETWORK' missing"
 else
     warn "Skipping network check because docker is unavailable"
-fi
 
-done
 if [ "$DOCKER_AVAILABLE" -eq 1 ]; then
     for c in "$PROM_CONTAINER" "$SNMP_CONTAINER"; do
         if container_running "$c"; then
