@@ -1282,3 +1282,7 @@ modules:
       indexes:
       - labelname: mtxrSystemInfoIndex
         type: gauge
+
+auths:
+  public_v2:
+    community: public_v2

@@ -94,8 +94,18 @@ docker run --rm \
     -m /opt/mibs \
     --no-fail-on-parse-errors
 
+# ── Fix ownership: file dari container milik root, copy lewat temp file ──────────────────────
+TEMP_YML=$(mktemp)
+if cat "$OUTPUT_YML" > "$TEMP_YML" 2>/dev/null; then
+    mv "$TEMP_YML" "$OUTPUT_YML"
+else
+    echo "   (file root, ambil ulang dari container...)"
+    docker run --rm -v "$SCRIPT_DIR":/opt --entrypoint sh prom/snmp-generator:latest -c "cat /opt/snmp.yml" > "$TEMP_YML"
+    mv "$TEMP_YML" "$OUTPUT_YML"
+fi
+
 # ── Validasi hasil ────────────────────────────────────────────────────────────────────────────
-if [ -f "$OUTPUT_YML" ]; then
+if [ -f "$OUTPUT_YML" ] && [ -s "$OUTPUT_YML" ]; then
     echo ""
     echo "✅ Berhasil! snmp.yml dihasilkan:"
     echo "   Lokasi : $OUTPUT_YML"
@@ -110,9 +120,20 @@ if [ -f "$OUTPUT_YML" ]; then
         echo "   Cek kembali generator.yml untuk OID entries."
     fi
 
+    # ── Tambah auths default ke snmp.yml ────────────────────────────────────────────────────────
     echo ""
-    echo "👉 Selanjutnya, restart container:"
-    echo "   docker compose -f docker-compose-snmp-exporter.yml down && docker compose -f docker-compose-snmp-exporter.yml up -d"
+    echo "🔧 Menambahkan auths default (public_v2) ke snmp.yml..."
+    echo "" >> "$OUTPUT_YML"
+    echo "auths:" >> "$OUTPUT_YML"
+    echo "  public_v2:" >> "$OUTPUT_YML"
+    echo "    community: public_v2" >> "$OUTPUT_YML"
+    echo "✅ auths ditambahkan"
+
+    echo ""
+    echo "👉 Selanjutnya ke server production:"
+    echo "   1. cd /root/monitoring-server"
+    echo "   2. scp juni@desktop:~/projects/docker/monitoring-server/snmp/snmp.yml ./snmp/"
+    echo "   3. docker compose -f docker-compose-snmp-exporter.yml down && docker compose -f docker-compose-snmp-exporter.yml up -d"
     echo ""
 else
     echo "❌ ERROR: snmp.yml gagal dihasilkan!"
