@@ -7,7 +7,7 @@
 global:
   scrape_interval: 15s         # Default scrape interval
   evaluation_interval: 15s     # Alert evaluation interval
-  scrape_timeout: 10s          # Timeout per scrape request
+  scrape_timeout: 30s          # Timeout per scrape request
   
   # Labels yang ditambahkan ke setiap time series
   external_labels:
