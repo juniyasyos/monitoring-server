@@ -11,8 +11,8 @@
 #   9116 - SNMP Exporter metrics endpoint and /snmp proxy
 #
 # Notes:
-#   - This uses the bundled default snmp_exporter config, which includes the mikrotik module.
-#   - Default auth is public_v2; change it only if your Mikrotik SNMP community differs.
+#   - snmp.yml is generated from snmp/generator.yml (run ./snmp/generate.sh)
+#   - Default auth is public_v2; change it in generator.yml if needed.
 ####################################################################################################
 
 name: snmp-exporter-stack
@@ -23,6 +23,8 @@ services:
     container_name: snmp-exporter
     ports:
       - "9116:9116"
+    volumes:
+      - ./snmp/snmp.yml:/etc/snmp_exporter/snmp.yml:ro
     command:
       - "--web.listen-address=:9116"
       - "--config.file=/etc/snmp_exporter/snmp.yml"
