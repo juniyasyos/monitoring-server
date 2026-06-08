@@ -110,7 +110,7 @@ is_valid_metrics() {
         return 1
     fi
 
-    if grep -q "^# HELP\|^if\|^sys\|^snmp_scrape" "$file"; then
+    if grep -q "^# HELP\|^[a-zA-Z][a-zA-Z0-9_]*{" "$file"; then
         return 0
     fi
 
@@ -162,7 +162,7 @@ print_section "[3] CEK MODULE DAN AUTHS DI snmp.yml"
 AUTHS=""
 
 if [ "$EXPORTER_RUNNING" -eq 1 ]; then
-    MODULE_COUNT=$(docker exec "$SNMP_CONTAINER" sh -c "grep -c '^mikrotik:' /etc/snmp_exporter/snmp.yml" 2>/dev/null)
+    MODULE_COUNT=$(docker exec "$SNMP_CONTAINER" sh -c "grep -c '  mikrotik:' /etc/snmp_exporter/snmp.yml" 2>/dev/null)
 
     if [ "$MODULE_COUNT" -gt 0 ] 2>/dev/null; then
         MODULE_FOUND=1
@@ -345,7 +345,7 @@ print_line ""
 # ==========================================================
 print_section "[7] STATUS TARGET DI PROMETHEUS"
 
-PROMETHEUS_PORT=$(docker ps --filter name=prometheus --format '{{.Ports}}' | grep -oP '([0-9]+)' | head -1)
+PROMETHEUS_PORT=$(docker ps --filter name=prometheus --format '{{.Ports}}' | grep -oP ':(\K[0-9]+)(?=->9090)' | head -1)
 PROM_PORT=${PROMETHEUS_PORT:-9090}
 
 PROM_RESULT=$(curl -s "http://localhost:$PROM_PORT/api/v1/targets" 2>/dev/null)
