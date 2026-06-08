@@ -17,15 +17,16 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 GENERATOR_YML="$SCRIPT_DIR/generator.yml"
 OUTPUT_YML="$SCRIPT_DIR/snmp.yml"
+MIBS_DIR="$SCRIPT_DIR/mibs"
 
 echo "============================================================"
 echo " SNMP Generator - MikroTik"
 echo "============================================================"
 echo " Generator config : $GENERATOR_YML"
 echo " Output           : $OUTPUT_YML"
+echo " MIBs dir         : $MIBS_DIR"
 echo "============================================================"
 echo ""
 
@@ -35,17 +36,32 @@ if [ ! -f "$GENERATOR_YML" ]; then
     exit 1
 fi
 
-# ── Generate snmp.yml ───────────────────────────────────────────────────────────────────────────
+# ── Copy MIB standar dari image generator (jika belum ada) ────────────────────────────────────
+if [ ! -d "$MIBS_DIR" ] || [ -z "$(ls -A "$MIBS_DIR" 2>/dev/null)" ]; then
+    echo "📦 Meng-copy MIB standar dari image generator..."
+    mkdir -p "$MIBS_DIR"
+    docker run --rm \
+        --entrypoint sh \
+        -v "$MIBS_DIR:/out" \
+        prom/snmp-generator:latest \
+        -c "cp -r /usr/share/snmp/mibs/* /out/ 2>/dev/null; echo done"
+    echo "✅ MIBs siap"
+    echo ""
+fi
+
+# ── Generate snmp.yml ─────────────────────────────────────────────────────────────────────────
 echo "🚀 Generating snmp.yml..."
 echo ""
 
 docker run --rm \
-    -v "$PROJECT_DIR/snmp":/opt \
+    -v "$SCRIPT_DIR":/opt \
     prom/snmp-generator:latest \
-    generate --output-path /opt/snmp.yml \
-    -g /opt/generator.yml
+    generate \
+    --output-path /opt/snmp.yml \
+    -g /opt/generator.yml \
+    -m /opt/mibs
 
-# ── Validasi hasil ──────────────────────────────────────────────────────────────────────────────
+# ── Validasi hasil ────────────────────────────────────────────────────────────────────────────
 if [ -f "$OUTPUT_YML" ]; then
     echo ""
     echo "✅ Berhasil! snmp.yml dihasilkan:"
