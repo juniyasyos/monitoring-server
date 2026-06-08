@@ -1,0 +1,124 @@
+-- Minimal MIKROTIK-MIB stub for SNMP generator
+-- Defines the OID tree for MikroTik RouterOS private MIB
+-- Enterprise OID: 1.3.6.1.4.1.14988
+
+MIKROTIK-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+    MODULE-IDENTITY, enterprises, Integer32, Gauge32, OBJECT-TYPE
+        FROM SNMPv2-SMI
+    DisplayString, TEXTUAL-CONVENTION
+        FROM SNMPv2-TC;
+
+mikrotik MODULE-IDENTITY
+    LAST-UPDATED "202001010000Z"
+    ORGANIZATION "MikroTik"
+    CONTACT-INFO "support@mikrotik.com"
+    DESCRIPTION "MIB for MikroTik RouterOS"
+    REVISION "202001010000Z"
+    DESCRIPTION "Initial definition"
+    ::= { enterprises 14988 }
+
+-- mtxrSystemInfo subtree: 1.3.6.1.4.1.14988.1.1.1.1
+mtxrSystemInfo OBJECT IDENTIFIER ::= { mikrotik 1 }
+mtxrSystemInfoTable OBJECT-TYPE
+    SYNTAX SEQUENCE OF MtxrSystemInfoEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION "System information table"
+    ::= { mtxrSystemInfo 1 }
+mtxrSystemInfoEntry OBJECT-TYPE
+    SYNTAX MtxrSystemInfoEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION "System information entry"
+    INDEX { mtxrSystemInfoIndex }
+    ::= { mtxrSystemInfoTable 1 }
+MtxrSystemInfoEntry ::= SEQUENCE {
+    mtxrSystemInfoIndex  Integer32,
+    mtxrSystemInfoValue  DisplayString
+}
+mtxrSystemInfoIndex OBJECT-TYPE
+    SYNTAX Integer32
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION "Index"
+    ::= { mtxrSystemInfoEntry 1 }
+
+-- mtxrCPULoad subtree: 1.3.6.1.4.1.14988.1.1.1.2
+mtxrCPULoad OBJECT IDENTIFIER ::= { mikrotik 1 1 1 2 }
+mtxrCPULoadTable OBJECT-TYPE
+    SYNTAX SEQUENCE OF MtxrCPULoadEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION "CPU load table"
+    ::= { mtxrCPULoad 1 }
+mtxrCPULoadEntry OBJECT-TYPE
+    SYNTAX MtxrCPULoadEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION "CPU load entry"
+    INDEX { mtxrCPULoadIndex }
+    ::= { mtxrCPULoadTable 1 }
+MtxrCPULoadEntry ::= SEQUENCE {
+    mtxrCPULoadIndex  Integer32,
+    mtxrCPULoadValue  Gauge32
+}
+mtxrCPULoadIndex OBJECT-TYPE
+    SYNTAX Integer32
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION "Index"
+    ::= { mtxrCPULoadEntry 1 }
+mtxrCPULoadValue OBJECT-TYPE
+    SYNTAX Gauge32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION "CPU load percentage"
+    ::= { mtxrCPULoadEntry 2 }
+
+-- mtxrTemperature subtree: 1.3.6.1.4.1.14988.1.1.1.3
+mtxrTemperature OBJECT IDENTIFIER ::= { mikrotik 1 1 1 3 }
+mtxrTemperatureTable OBJECT-TYPE
+    SYNTAX SEQUENCE OF MtxrTemperatureEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION "Temperature table"
+    ::= { mtxrTemperature 1 }
+mtxrTemperatureEntry OBJECT-TYPE
+    SYNTAX MtxrTemperatureEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION "Temperature entry"
+    INDEX { mtxrTemperatureIndex }
+    ::= { mtxrTemperatureTable 1 }
+MtxrTemperatureEntry ::= SEQUENCE {
+    mtxrTemperatureIndex   Integer32,
+    mtxrTemperatureValue   Integer32
+}
+mtxrTemperatureIndex OBJECT-TYPE
+    SYNTAX Integer32
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION "Index"
+    ::= { mtxrTemperatureEntry 1 }
+mtxrTemperatureValue OBJECT-TYPE
+    SYNTAX Integer32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION "Temperature value"
+    ::= { mtxrTemperatureEntry 2 }
+
+-- mtxrHealth subtree: 1.3.6.1.4.1.14988.1.1.1.4
+mtxrHealth OBJECT IDENTIFIER ::= { mikrotik 1 1 1 4 }
+
+-- mtxrWlStat subtree: 1.3.6.1.4.1.14988.1.1.1.5
+mtxrWlStat OBJECT IDENTIFIER ::= { mikrotik 1 1 1 5 }
+
+-- mtxrPOE subtree: 1.3.6.1.4.1.14988.1.1.1.6
+mtxrPOE OBJECT IDENTIFIER ::= { mikrotik 1 1 1 6 }
+
+-- mtxrUPS subtree: 1.3.6.1.4.1.14988.1.1.1.7
+mtxrUPS OBJECT IDENTIFIER ::= { mikrotik 1 1 1 7 }
+
+END

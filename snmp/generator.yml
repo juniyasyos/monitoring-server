@@ -59,6 +59,3 @@ modules:
         type: DisplayString
       ifName:
         type: DisplayString
-
-    auth:
-      community: public_v2

@@ -8,7 +8,7 @@
 #
 # Requirements:
 #   - Docker installed
-#   - Internet access (to pull prom/snmp-generator image)
+#   - Internet access (to pull prom/snmp-generator image & download MIBs)
 #
 # Output:
 #   ./snmp/snmp.yml  →  generated config file
@@ -20,6 +20,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 GENERATOR_YML="$SCRIPT_DIR/generator.yml"
 OUTPUT_YML="$SCRIPT_DIR/snmp.yml"
 MIBS_DIR="$SCRIPT_DIR/mibs"
+MIB_REPO="https://raw.githubusercontent.com/librenms/librenms/master/mibs"
 
 echo "============================================================"
 echo " SNMP Generator - MikroTik"
@@ -36,18 +37,49 @@ if [ ! -f "$GENERATOR_YML" ]; then
     exit 1
 fi
 
-# ── Copy MIB standar dari image generator (jika belum ada) ────────────────────────────────────
-if [ ! -d "$MIBS_DIR" ] || [ -z "$(ls -A "$MIBS_DIR" 2>/dev/null)" ]; then
-    echo "📦 Meng-copy MIB standar dari image generator..."
-    mkdir -p "$MIBS_DIR"
-    docker run --rm \
-        --entrypoint sh \
-        -v "$MIBS_DIR:/out" \
-        prom/snmp-generator:latest \
-        -c "cp -r /usr/share/snmp/mibs/* /out/ 2>/dev/null; echo done"
-    echo "✅ MIBs siap"
-    echo ""
-fi
+# ── Download standard MIBs dari LibreNMS ───────────────────────────────────────────────────────
+mkdir -p "$MIBS_DIR"
+
+echo "📥 Download MIB standar (SNMPv2-SMI, IF-MIB, HOST-RESOURCES-MIB, dll)..."
+
+MIB_FILES=(
+    "SNMPv2-SMI"
+    "SNMPv2-TC"
+    "SNMPv2-CONF"
+    "SNMPv2-MIB"
+    "IF-MIB"
+    "IANAifType-MIB"
+    "HOST-RESOURCES-MIB"
+    "HOST-RESOURCES-TYPES"
+    "INET-ADDRESS-MIB"
+    "SNMP-FRAMEWORK-MIB"
+    "SNMP-MPD-MIB"
+    "SNMP-TARGET-MIB"
+    "SNMP-NOTIFICATION-MIB"
+    "SNMP-USER-BASED-SM-MIB"
+    "SNMP-VIEW-BASED-ACM-MIB"
+    "SNMP-COMMUNITY-MIB"
+    "SNMP-PROXY-MIB"
+)
+
+for mib in "${MIB_FILES[@]}"; do
+    filename="$mib.txt"
+    if [ ! -f "$MIBS_DIR/$filename" ]; then
+        echo "   Downloading $filename..."
+        curl -sL "$MIB_REPO/$mib" -o "$MIBS_DIR/$filename"
+    fi
+done
+
+# ── Copy MIB NET-SNMP tambahan dari image generator ────────────────────────────────────────────
+echo "   Copy MIB NET-SNMP tambahan dari image generator..."
+docker run --rm \
+    --entrypoint sh \
+    -v "$MIBS_DIR:/out" \
+    prom/snmp-generator:latest \
+    -c "cp -rn /usr/share/snmp/mibs/* /out/ 2>/dev/null; echo done"
+
+echo "✅ MIBs siap"
+echo ""
 
 # ── Generate snmp.yml ─────────────────────────────────────────────────────────────────────────
 echo "🚀 Generating snmp.yml..."
@@ -59,7 +91,8 @@ docker run --rm \
     generate \
     --output-path /opt/snmp.yml \
     -g /opt/generator.yml \
-    -m /opt/mibs
+    -m /opt/mibs \
+    --no-fail-on-parse-errors
 
 # ── Validasi hasil ────────────────────────────────────────────────────────────────────────────
 if [ -f "$OUTPUT_YML" ]; then
@@ -70,7 +103,6 @@ if [ -f "$OUTPUT_YML" ]; then
     echo "   Baris  : $(wc -l < "$OUTPUT_YML") lines"
     echo ""
 
-    # Cek apakah module mikrotik ada di output
     if grep -q "mikrotik:" "$OUTPUT_YML"; then
         echo "✅ Module 'mikrotik' ditemukan di snmp.yml"
     else
@@ -80,8 +112,7 @@ if [ -f "$OUTPUT_YML" ]; then
 
     echo ""
     echo "👉 Selanjutnya, restart container:"
-    echo "   docker compose -f docker-compose-snmp-exporter.yml down"
-    echo "   docker compose -f docker-compose-snmp-exporter.yml up -d"
+    echo "   docker compose -f docker-compose-snmp-exporter.yml down && docker compose -f docker-compose-snmp-exporter.yml up -d"
     echo ""
 else
     echo "❌ ERROR: snmp.yml gagal dihasilkan!"
