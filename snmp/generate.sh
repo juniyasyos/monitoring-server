@@ -42,8 +42,8 @@ echo ""
 docker run --rm \
     -v "$PROJECT_DIR/snmp":/opt \
     prom/snmp-generator:latest \
-    generate --output-directory /opt \
-    -m /opt/generator.yml
+    generate --output-path /opt/snmp.yml \
+    -g /opt/generator.yml
 
 # ── Validasi hasil ──────────────────────────────────────────────────────────────────────────────
 if [ -f "$OUTPUT_YML" ]; then
