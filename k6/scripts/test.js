@@ -1,29 +1,32 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 
-// Konfigurasi load testing
 export const options = {
-  vus: 10,           // jumlah Virtual Users (pengguna bersamaan)
-  duration: '30s',   // durasi test berjalan
-  // threshold (batas toleransi) untuk menentukan test sukses/gagal
+  stages: [
+    { duration: '30s', target: 50 },   // pemanasan
+    { duration: '1m', target: 100 },   // naik ke 100 user
+    { duration: '1m', target: 200 },   // naik ke 200 user
+    { duration: '2m', target: 400 },   // puncak 400 user
+    { duration: '1m', target: 400 },   // tahan 400 user
+    { duration: '30s', target: 0 },    // turun perlahan
+  ],
+
   thresholds: {
-    http_req_duration: ['p(95)<500'], // 95% request harus selesai di bawah 500ms
-    http_req_failed: ['rate<0.01'],   // maksimal 1% request yang boleh gagal
+    http_req_failed: ['rate<0.01'],        // error maksimal 1%
+    http_req_duration: ['p(95)<1000'],     // 95% request di bawah 1 detik
+    checks: ['rate>0.99'],                 // 99% check harus sukses
   },
 };
 
 export default function () {
-  // Ganti URL ini dengan website yang ingin Anda test
-  const TARGET_URL = 'http://192.168.1.9:8110'; 
+  const TARGET_URL = 'http://192.168.1.9:8110';
 
   const res = http.get(TARGET_URL);
 
-  // Verifikasi response
   check(res, {
     'status is 200': (r) => r.status === 200,
-    'response time OK': (r) => r.timings.duration < 500,
+    'response time < 1s': (r) => r.timings.duration < 1000,
   });
 
-  // Jeda 1 detik antar request tiap Virtual User
   sleep(1);
 }
