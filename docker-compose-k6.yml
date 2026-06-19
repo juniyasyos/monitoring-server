@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  k6:
+    image: grafana/k6:latest
+    container_name: k6-load-test
+    # Berjalan sekali lalu exit setelah test selesai
+    profiles: ["loadtest"]
+    volumes:
+      - ./k6/scripts:/scripts
+    # Jika ingin mengirim metrics langsung ke prometheus (K6 versi baru), hapus komentar di bawah
+    # environment:
+    #   - K6_OUT=experimental-prometheus-rw
+    #   - K6_PROMETHEUS_RW_SERVER_URL=http://prometheus:9090/api/v1/write
+    command: run /scripts/test.js
