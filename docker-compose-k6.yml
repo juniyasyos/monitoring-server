@@ -12,4 +12,5 @@ services:
     # environment:
     #   - K6_OUT=experimental-prometheus-rw
     #   - K6_PROMETHEUS_RW_SERVER_URL=http://prometheus:9090/api/v1/write
-    command: run /scripts/test.js
+    # command: run /scripts/test.js
+    command: run /scripts/test_login.js
