@@ -12,9 +12,6 @@ export const options = {
     { duration: '30s', target: 150 },   // naik ke 150 VU
     { duration: '1m', target: 150 },    // tahan 150 VU
 
-    { duration: '30s', target: 200 },   // naik ke 200 VU
-    { duration: '2m', target: 200 },    // tahan 200 VU
-
     { duration: '30s', target: 0 },     // turun perlahan
   ],
 
