@@ -1,0 +1,39 @@
+---
+- name: Run K6 Dynamic Load Test
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    # Konfigurasi default, bisa dioverride menggunakan --extra-vars
+    protocol: "http"
+    target_host: "192.168.1.9"
+    target_port: "7100"
+    target_endpoint: "/login"
+    
+    # Nama script k6 yang ingin dijalankan (berada di folder k6/scripts/)
+    script_name: "test.js"
+    
+    # URL dinamis yang digenerate dari variabel di atas
+    target_url: "{{ protocol }}://{{ target_host }}:{{ target_port }}{{ target_endpoint }}"
+
+  tasks:
+    - name: Tampilkan target URL yang akan ditest
+      ansible.builtin.debug:
+        msg: "Mulai load test k6 ke target URL: {{ target_url }} menggunakan script: {{ script_name }}"
+
+    - name: Jalankan k6 load test menggunakan Docker
+      ansible.builtin.command:
+        cmd: >
+          docker run --rm 
+          -v {{ playbook_dir }}/k6/scripts:/scripts 
+          -e TARGET_URL={{ target_url }} 
+          grafana/k6 run /scripts/{{ script_name }}
+      register: k6_output
+      changed_when: true
+      # Supaya playbook tidak berhenti jika test k6 ada error/fail di threshold
+      ignore_errors: true 
+
+    - name: Tampilkan hasil test k6
+      ansible.builtin.debug:
+        var: k6_output.stdout_lines
